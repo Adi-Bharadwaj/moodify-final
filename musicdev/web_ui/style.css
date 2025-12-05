@@ -1,0 +1,112 @@
+body {
+    background: #050505;
+    font-family: "Segoe UI", sans-serif;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    width: 90%;
+    max-width: 650px;
+    margin-top: 40px;
+    text-align: center;
+}
+
+.title {
+    font-size: 40px;
+    margin-bottom: 25px;
+    color: #0affff;
+    text-shadow: 0 0 15px #0affff;
+}
+
+.neon {
+    color: #ff00ff;
+    text-shadow: 0 0 20px #ff00ff;
+}
+
+.camera-box {
+    position: relative;
+    border: 2px solid #0affff;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px #0affff;
+}
+
+video {
+    width: 100%;
+    border-radius: 10px;
+}
+
+.neon-btn {
+    margin-top: 12px;
+    padding: 12px 25px;
+    background: transparent;
+    border: 2px solid #ff00ff;
+    color: white;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+    text-shadow: 0 0 10px #ff00ff;
+}
+
+.neon-btn:hover {
+    background: #ff00ff33;
+    box-shadow: 0 0 25px #ff00ff;
+}
+
+.neon-input {
+    width: 100%;
+    height: 90px;
+    margin-top: 20px;
+    padding: 10px;
+    background: #111;
+    border: 2px solid #0affff;
+    color: white;
+    border-radius: 10px;
+    font-size: 16px;
+    text-shadow: 0 0 10px #0affff;
+}
+
+.or {
+    margin: 15px 0;
+    color: #555;
+}
+
+.loading {
+    margin-top: 20px;
+    font-size: 20px;
+    color: #0affff;
+    text-shadow: 0 0 10px #0affff;
+}
+
+.hidden {
+    display: none;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #111;
+    border-top: 4px solid #0affff;
+    border-radius: 50%;
+    margin: auto;
+    margin-bottom: 10px;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+.result {
+    margin-top: 25px;
+    padding: 15px;
+    background: #111;
+    border: 2px solid #ff00ff;
+    border-radius: 12px;
+    font-size: 20px;
+    box-shadow: 0 0 20px #ff00ff;
+}
