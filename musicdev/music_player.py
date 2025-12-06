@@ -7,6 +7,7 @@ PLAYLISTS = {
 
 def play_music(mood: str) -> str:
     mood = mood.lower().strip()
+    print("playmusic mood: ",mood)
     if mood not in PLAYLISTS:
         mood = "neutral"
     return PLAYLISTS[mood]

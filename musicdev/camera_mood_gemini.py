@@ -1,132 +1,178 @@
-# camera_mood_gemini.py
 import os
 import random
 from PIL import Image
+import json
+from google import genai
+import cv2
 
-GEMINI_API_KEY = os.getenv("AIzaSyC25hfSzRZ4baYv5ExzEs8cwY57OczpmiQ")
+# -----------------------------------------------------
+# GEMINI API KEY SETUP
+# -----------------------------------------------------
+GEMINI_API_KEY = "AIzaSyBdaWWfn7UzdjrPZt2Krn52i6lVzXthxVk"
+# Create Gemini client
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Try to import/configure the Google generative AI library if key present
-genai = None
-if GEMINI_API_KEY:
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-    except Exception as e:
-        print("Warning: google.generativeai import/config failed:", e)
-        genai = None
+# Use a model that exists for your account (you saw these in list_models.py)
+MODEL_NAME = "models/gemini-2.5-flash"
 
-# Candidate vision-capable models to try (may vary by account/region)
+# Official Gemini v1 models
 _MODEL_CANDIDATES = [
-    "gemini-1.5-pro-vision",
-    "gemini-1.5-pro-001",
-    "gemini-1.5-flash-001",
-    "gemini-1.0-pro-vision"
+    "gemini-2.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite-preview"
 ]
 
 LABELS = ["happy", "sad", "angry", "neutral", "excited", "stressed"]
 
 
+# -----------------------------------------------------
+# FACE EXTRACTION
+# -----------------------------------------------------
+def extract_face(image_path: str) -> str:
+    try:
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        img = cv2.imread(image_path)
+        if img is None:
+            return image_path
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        if len(faces) == 0:
+            return image_path
+
+        x, y, w, h = faces[0]
+        face_crop = img[y:y + h, x:x + w]
+        cropped_path = image_path.replace(".png", "_crop.png")
+        cv2.imwrite(cropped_path, face_crop)
+        return cropped_path
+
+    except Exception:
+        return image_path
+
+
+# -----------------------------------------------------
+# CHOOSE BEST AVAILABLE MODEL
+# -----------------------------------------------------
 def _choose_model():
-    """Return a GenerativeModel instance for the first working candidate, or None."""
-    if not genai:
-        return None
-    for name in _MODEL_CANDIDATES:
+    for model_name in _MODEL_CANDIDATES:
         try:
-            model = genai.GenerativeModel(name)
-            # quick smoke call not made here to avoid extra requests; assume instantiation ok
-            return model
+            return genai.GenerativeModel(model_name)
         except Exception:
             continue
     return None
 
 
+# -----------------------------------------------------
+# FALLBACKS
+# -----------------------------------------------------
 def _text_fallback(text: str) -> str:
     t = text.lower()
     if any(w in t for w in ["happy", "great", "joy", "excited", "awesome"]):
         return "happy"
-    if any(w in t for w in ["sad", "down", "unhappy", "depressed", "lonely"]):
+    if any(w in t for w in ["sad", "down", "unhappy", "lonely"]):
         return "sad"
-    if any(w in t for w in ["angry", "mad", "furious", "annoyed"]):
+    if any(w in t for w in ["angry", "mad", "furious"]):
         return "angry"
-    if any(w in t for w in ["stress", "stressed", "anxious", "nervous"]):
+    if any(w in t for w in ["stress", "stressed", "anxious"]):
         return "stressed"
     return "neutral"
 
 
 def _image_fallback(image_path: str) -> str:
-    """Very simple brightness-based fallback heuristic."""
     try:
         img = Image.open(image_path).convert("L").resize((10, 10))
-        avg = sum(img.getdata()) / 100.0
+        avg = sum(img.getdata()) / 100
         if avg > 140:
             return random.choice(["happy", "neutral"])
         elif avg > 100:
             return random.choice(["neutral", "happy", "sad"])
         else:
             return random.choice(["sad", "angry", "neutral"])
-    except Exception:
+    except:
         return random.choice(LABELS)
 
 
-# -----------------------------
-# PUBLIC: classify image using Gemini if possible, else fallback
-# -----------------------------
+# -----------------------------------------------------
+# IMAGE → EMOTION
+# -----------------------------------------------------
 def classify_emotion_from_image_gemini(image_path: str) -> str:
-    model = _choose_model()
-    if not model:
-        return _image_fallback(image_path)
+    processed_path = extract_face(image_path)
 
-    # read raw bytes
-    with open(image_path, "rb") as f:
-        image_bytes = f.read()
+    #model = _choose_model()
+    #if not model:
+     #   return _image_fallback(processed_path)
+
+    #with open(processed_path, "rb") as f:
+        #img_bytes = f.read()
+    try:
+        img = Image.open(processed_path)
+    except Exception as e:
+        print("[ERROR] Failed to open image:", e)
+        return "neutral"
 
     prompt = (
-        "Analyze the facial expression in the image and respond with EXACTLY one word: "
-        "happy, sad, angry, neutral, excited, or stressed. Respond only with the word."
+        "Analyze the facial expression and respond with ONLY one word: "
+        "happy, sad, angry, neutral, excited, stressed."
     )
 
     try:
-        # pass prompt + image bytes in the format genai expects
-        response = model.generate_content([prompt, {"mime_type": "image/png", "data": image_bytes}])
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[prompt, img],
+        )
+        print("response: ",response)
         text = (response.text or "").strip().lower()
-        for lab in LABELS:
-            if lab in text:
-                return lab
+        print("text: ",text)
+        for label in LABELS:
+            if label in text:
+                return label
+
     except Exception as e:
         print("Gemini image call failed:", e)
 
-    return _image_fallback(image_path)
+    return _image_fallback(processed_path)
 
 
+# -----------------------------------------------------
+# STABLE VOTING (reduces noise)
+# -----------------------------------------------------
 def stable_mood_gemini(image_path: str, votes: int = 3) -> str:
     results = [classify_emotion_from_image_gemini(image_path) for _ in range(votes)]
-    # majority
     for label in LABELS:
         if results.count(label) >= (votes // 2) + 1:
             return label
-    # tie-break
     return max(set(results), key=results.count)
 
 
-# -----------------------------
-# PUBLIC: classify text using Gemini if possible, else fallback
-# -----------------------------
+# -----------------------------------------------------
+# TEXT → EMOTION
+# -----------------------------------------------------
 def classify_emotion_from_text_gemini(text: str) -> str:
-    if not genai:
-        return _text_fallback(text)
-
-    model = _choose_model()
+    model=MODEL_NAME
     if not model:
         return _text_fallback(text)
 
-    prompt = f"Classify the emotion of this text as one word (happy, sad, angry, neutral, excited, stressed). Text: {text}"
+    
+    prompt = (
+        "Classify the emotional tone of this message in ONE word: "
+        "happy, sad, angry, neutral, excited, stressed."
+          )  
     try:
-        resp = model.generate_content(prompt)
-        out = (resp.text or "").strip().lower()
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[prompt, text],
+        )
+        print("response: ",response)
+        text = (response.text or "").strip().lower()
+        print("text: ",text)
         for lab in LABELS:
             if lab == out or lab in out:
-                return lab
-    except Exception as e:
-        print("Gemini text call failed:", e)
+                 return lab
+    except Exception:
+        pass
 
     return _text_fallback(text)
